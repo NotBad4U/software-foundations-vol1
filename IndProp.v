@@ -386,9 +386,94 @@ Inductive exp_match {T} : list T -> reg_exp -> Prop :=
 
 Notation "s =~ re" := (exp_match s re) (at level 80).
 
-
 Example reg_exp_ex1 : [1] =~ Char 1.
 Proof.
-  apply MChar.
+  apply (MChar 1).
 Qed.
 
+Example reg_exp_ex2 : [1; 2] =~ App (Char 1) (Char 2).
+Proof.
+apply (MApp [1] _ [2]).
+apply (MChar 1).
+apply (MChar 2).
+Qed.
+
+Example reg_exp_ex3 : ~([1; 2] =~ Char 1).
+Proof.
+unfold not.
+intro H.
+inversion H.
+Qed.
+
+Fixpoint reg_exp_of_list {T} (l : list T) :=
+match l with
+| [] => EmptyStr
+| x :: l' => App (Char x) (reg_exp_of_list l')
+end.
+
+Example reg_exp_ex4 : [1; 2; 3] =~ reg_exp_of_list [1; 2; 3].
+Proof.
+simpl.
+apply (MApp [1]).
+apply MChar.
+apply (MApp [2]).
+apply MChar.
+apply (MApp [3]).
+apply MChar.
+apply MEmpty.
+Qed.
+
+Lemma MStar1 :
+  forall T s (re : @reg_exp T) ,
+    s =~ re ->
+    s =~ Star re.
+Proof.
+intros T s re H.
+rewrite <- (app_nil_r _ s).
+apply (MStarApp s [] ).
+- assumption.
+- apply MStar0.
+Qed.
+
+Lemma empty_is_empty : forall T (s : list T),
+  ~(s =~ EmptySet).
+Proof.
+intros T s.
+unfold not.
+induction s as [|h' s' IHs'].
+- intro H. inversion H.
+- intro. apply IHs'. inversion H.
+Qed.
+
+Lemma MUnion' : forall T (s : list T) (re1 re2 : @reg_exp T),
+  s =~ re1 \/ s =~ re2 ->
+  s =~ Union re1 re2.
+Proof.
+intros T s re1 re2 H.
+destruct H.
+- apply MUnionL.
+  assumption.
+- apply MUnionR.
+  assumption.
+Qed.
+
+
+Lemma MStar' : forall T (ss : list (list T)) (re : reg_exp),
+  (forall s, In s ss -> s =~ re) ->
+  fold app ss [] =~ Star re.
+Proof.
+intros T ss re H.
+induction ss.
+- simpl. apply MStar0.
+- simpl. apply MStarApp.
+  + apply H.
+    simpl.
+    left.
+    reflexivity.
+  + apply IHss.
+    intros s H1.
+    apply H.
+    simpl.
+    right.
+    assumption.
+Qed.
