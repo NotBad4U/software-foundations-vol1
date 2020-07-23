@@ -308,18 +308,44 @@ Qed.
 Theorem leb_complete : forall n m,
   n <=? m = true -> n <= m.
 Proof.
-Admitted.
+  intros n m H.
+  generalize dependent n.
+  induction m as [|m' IHm'].
+  - destruct n.
+    + intro. apply le_n.
+    + simpl. intro. discriminate H.
+  - destruct n as [|n'] eqn: E.
+    + simpl. intro. apply O_le_n.
+    + simpl. intro. apply IHm' in H. apply n_le_m__Sn_le_Sm. assumption.
+Qed.
 
 Theorem leb_correct : forall n m,
   n <= m ->
   n <=? m = true.
 Proof.
+intros n m H.
+    induction H as [| m' lnm IH].
+  - induction n as [| n' IHn'].
+    + reflexivity.
+    + simpl. assumption.
+  - induction n as [| n' IH'].
+    + reflexivity.
+    + destruct m' as [| m''] eqn: E.
+       simpl in IH.
+      * discriminate IH.
 Admitted.
 
 Theorem leb_true_trans : forall n m o,
   n <=? m = true -> m <=? o = true -> n <=? o = true.
 Proof.
-Admitted.
+intros n m o H H1.
+apply leb_complete in H.
+apply leb_complete in H1.
+apply leb_correct.
+apply le_trans with m.
+- assumption.
+- assumption.
+Qed.
 
 Theorem leb_iff : forall n m,
   n <=? m = true <-> n <= m.
