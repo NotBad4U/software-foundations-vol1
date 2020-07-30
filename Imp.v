@@ -659,3 +659,167 @@ apply E_Seq with (Y !-> 0; X !-> 2).
     reflexivity.
 Qed.
 
+Theorem ceval_deterministic: forall c st st1 st2,
+     st =[ c ]=> st1 ->
+     st =[ c ]=> st2 ->
+     st1 = st2.
+Proof.
+  intros c st st1 st2 E1 E2.
+  generalize dependent st2.
+  induction E1;
+           intros st2 E2; inversion E2; subst.
+  - (* E_Skip *) reflexivity.
+  - (* E_Ass *) reflexivity.
+  - (* E_Seq *)
+    assert (st' = st'0) as EQ1.
+    { (* Proof of assertion *) apply IHE1_1; assumption. }
+    subst st'0.
+    apply IHE1_2. assumption.
+  - (* E_IfTrue, b1 evaluates to true *)
+      apply IHE1. assumption.
+  - (* E_IfTrue,  b1 evaluates to false (contradiction) *)
+      rewrite H in H5. discriminate H5.
+  - (* E_IfFalse, b1 evaluates to true (contradiction) *)
+      rewrite H in H5. discriminate H5.
+  - (* E_IfFalse, b1 evaluates to false *)
+      apply IHE1. assumption.
+  - (* E_WhileFalse, b1 evaluates to false *)
+    reflexivity.
+  - (* E_WhileFalse, b1 evaluates to true (contradiction) *)
+    rewrite H in H2. discriminate H2.
+  - (* E_WhileTrue, b1 evaluates to false (contradiction) *)
+    rewrite H in H4. discriminate H4.
+  - (* E_WhileTrue, b1 evaluates to true *)
+      assert (st' = st'0) as EQ1.
+      { (* Proof of assertion *) apply IHE1_1; assumption. }
+      subst st'0.
+      apply IHE1_2. assumption. Qed.
+
+(* Reasoning About Imp Programs *)
+
+Theorem plus2_spec : forall st n st',
+  st X = n ->
+  st =[ plus2 ]=> st' ->
+  st' X = n + 2.
+Proof.
+  intros st n st' HX Heval.
+  inversion Heval. subst. clear Heval. simpl.
+  apply t_update_eq. Qed.
+
+Definition XtimesYinZ' : com :=
+  Z ::= (AMult (AId X) (AId Y)).
+
+Theorem XtimesYinZ_spec : forall st x y st',
+		st X = x ->
+			st Y = y ->
+				st =[ XtimesYinZ ]=> st' ->
+					st' Z = x * y.
+Proof.
+intros st x y st' Hx Hy Heval.
+inversion Heval.
+subst.
+simpl.
+apply t_update_eq.
+Qed.
+
+Theorem loop_never_stops : forall st st',
+  ~(st =[ loop ]=> st').
+Proof.
+  intros st st' contra.
+  unfold loop in contra.
+  remember (WHILE true DO SKIP END)%imp as loopdef eqn:Heqloopdef.
+  induction contra; repeat  try (discriminate Heqloopdef).
+  - simpl in Heqloopdef.
+    inversion Heqloopdef.
+    rewrite H1 in H.
+    discriminate H.
+  - apply IHcontra2.
+    inversion Heqloopdef.
+    reflexivity.
+Qed.
+
+Open Scope imp_scope.
+Fixpoint no_whiles (c : com) : bool :=
+  match c with
+  | SKIP =>
+      true
+  | _ ::= _ =>
+      true
+  | c1 ;; c2 =>
+      andb (no_whiles c1) (no_whiles c2)
+  | TEST _ THEN ct ELSE cf FI =>
+      andb (no_whiles ct) (no_whiles cf)
+  | WHILE _ DO _ END =>
+      false
+  end.
+Close Scope imp_scope.
+
+Inductive no_whilesR: com -> Prop :=
+| NW_skip : no_whilesR SKIP
+| NW_ass : forall X a, no_whilesR (X ::= a)
+| NW_seq : forall c1 c2,
+             no_whilesR c1 ->
+             no_whilesR c2 ->
+             no_whilesR (c1 ;; c2)
+| NW_if : forall b c1 c2,
+            no_whilesR c1 ->
+            no_whilesR c2 ->
+            no_whilesR (TEST b THEN c1 ELSE c2 FI).
+
+
+Theorem no_whiles_eqv:
+   forall c, no_whiles c = true <-> no_whilesR c.
+Proof.
+intros c.
+split.
+- intro H. induction c; try constructor.
+  + inversion H.
+    apply IHc1.
+    apply andb_true_iff in H1.
+    apply proj1 in H1.
+    assumption.
+  + inversion H.
+    apply IHc2.
+    apply andb_true_iff in H1.
+    apply proj2 in H1.
+    assumption.
+  + apply IHc1.
+    simpl in H.
+    apply andb_true_iff in H.
+    apply proj1 in H.
+    assumption.
+  + apply IHc2.
+    simpl in H.
+    apply andb_true_iff in H.
+    apply proj2 in H.
+    assumption.
+  + discriminate H.
+- intro H.
+  induction c; try reflexivity.
+  + simpl.
+    inversion H.
+    subst.
+    apply andb_true_iff.
+    split.
+      * apply IHc1. assumption.
+      * apply IHc2. assumption.
+  + simpl.
+    inversion H.
+    subst.
+    apply andb_true_iff.
+    split.
+      * apply IHc1. assumption.
+      * apply IHc2. assumption.
+  + inversion H.
+Qed.
+
+Theorem no_whiles_terminate: forall c st,
+  no_whilesR c -> exists st', st =[ c ]=> st'.
+Proof.
+intros c st H.
+induction H.
+- exists st. constructor.
+- exists (X0 !-> aeval st a ; st).
+  constructor.
+  reflexivity.
+- Admitted.
